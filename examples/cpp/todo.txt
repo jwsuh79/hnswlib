@@ -1,0 +1,20 @@
+add argparser:
+
+https://likle.github.io/cargs/
+
+add README for valgrind:
+
+https://developer.mantidproject.org/ProfilingWithValgrind.html
+
+
+#gprof
+
+sudo apt-get install binutils
+
+g++ test.c -o gprofTest -pg 
+
+./gprofTest
+
+gprf gprfTest gmon.out > profOutput.txt
+
+cat profOutput.txt

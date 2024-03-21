@@ -1,4 +1,6 @@
-#include "../../hnswlib/hnswlib.h"
+#include "hnswlib/hnswlib.h"
+#include "argh.h"
+#include <iostream>
 #include <thread>
 
 
@@ -60,13 +62,20 @@ inline void ParallelFor(size_t start, size_t end, size_t numThreads, Function fn
 }
 
 
-int main() {
+int main(int argc, char* argv[]) {
     int dim = 16;               // Dimension of the elements
     int max_elements = 10000;   // Maximum number of elements, should be known beforehand
     int M = 16;                 // Tightly connected with internal dimensionality of the data
                                 // strongly affects the memory consumption
     int ef_construction = 200;  // Controls index search speed/build speed tradeoff
     int num_threads = 20;       // Number of threads for operations with index
+
+    auto cmdl = argh::parser(argc, argv); 
+    cmdl("dim", 16) >> dim;
+    cmdl("max", 10000) >> max_elements;
+    cmdl("M", 16) >> M;
+    cmdl("ef", 200) >> ef_construction;
+    cmdl("threads", 20) >> num_threads;
 
     // Initing index
     hnswlib::L2Space space(dim);
