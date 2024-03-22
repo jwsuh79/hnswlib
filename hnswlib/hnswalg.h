@@ -228,8 +228,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         vl_type *visited_array = vl->mass;
         vl_type visited_array_tag = vl->curV;
 
-        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;
-        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidateSet;
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates;  // W
+        std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidateSet;  // C
 
         dist_t lowerBound;
         if (!isMarkedDeleted(ep_id)) {
@@ -1210,6 +1210,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             memset(linkLists_[cur_c], 0, size_links_per_element_ * curlevel + 1);
         }
 
+        // Search Layer (Alg2)- 1st
         if ((signed)currObj != -1) {
             if (curlevel < maxlevelcopy) {
                 dist_t curdist = fstdistfunc_(data_point, getDataByInternalId(currObj), dist_func_param_);
@@ -1243,7 +1244,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 if (level > maxlevelcopy || level < 0)  // possible?
                     throw std::runtime_error("Level error");
 
-                std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(
+                std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(  // Search-Layer(2nd)
                         currObj, data_point, level);
                 if (epDeleted) {
                     top_candidates.emplace(fstdistfunc_(data_point, getDataByInternalId(enterpoint_copy), dist_func_param_), enterpoint_copy);
