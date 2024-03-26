@@ -21,10 +21,13 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     static const unsigned char DELETE_MARK = 0x01;
 
     size_t max_elements_{0};
-    mutable std::atomic<size_t> cur_element_count{0};  // current number of elements
+    //mutable std::atomic<size_t> cur_element_count{0};  // current number of elements // mutable?
+    std::atomic<size_t> cur_element_count{0};  // current number of elements
+
     size_t size_data_per_element_{0};
     size_t size_links_per_element_{0};
-    mutable std::atomic<size_t> num_deleted_{0};  // number of deleted elements
+    //mutable std::atomic<size_t> num_deleted_{0};  // number of deleted elements  // mutable?
+    std::atomic<size_t> num_deleted_{0};  // number of deleted elements
     size_t M_{0};
     size_t maxM_{0};
     size_t maxM0_{0};
@@ -38,6 +41,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
     // Locks operations with element by label value
     mutable std::vector<std::mutex> label_op_locks_;
+    
 
     std::mutex global;
     std::vector<std::mutex> link_list_locks_;
@@ -56,7 +60,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     DISTFUNC<dist_t> fstdistfunc_;
     void *dist_func_param_{nullptr};
 
-    mutable std::mutex label_lookup_lock;  // lock for label_lookup_
+    //mutable std::mutex label_lookup_lock;  // lock for label_lookup_  // mutable?
+    std::mutex label_lookup_lock;  // lock for label_lookup_
     std::unordered_map<labeltype, tableint> label_lookup_;
 
     std::default_random_engine level_generator_;
@@ -64,7 +69,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
     mutable std::atomic<long> metric_distance_computations{0};
     mutable std::atomic<long> metric_hops{0};
-
+    
     bool allow_replace_deleted_ = false;  // flag to replace deleted elements (marked as deleted) during insertions
 
     std::mutex deleted_elements_lock;  // lock for deleted_elements
