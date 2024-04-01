@@ -60,8 +60,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     DISTFUNC<dist_t> fstdistfunc_;
     void *dist_func_param_{nullptr};
 
-    //mutable std::mutex label_lookup_lock;  // lock for label_lookup_  // mutable?
-    std::mutex label_lookup_lock;  // lock for label_lookup_
+    mutable std::mutex label_lookup_lock;  // lock for label_lookup_ is mutable to pass the multiThreadLoad_test.cpp compilation
     std::unordered_map<labeltype, tableint> label_lookup_;
 
     std::default_random_engine level_generator_;
