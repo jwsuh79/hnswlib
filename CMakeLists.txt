@@ -53,31 +53,6 @@ if(HNSWLIB_EXAMPLES)
       SET( CMAKE_CXX_FLAGS  "/O2 -DHAVE_CXX0X /W1 /openmp /EHsc" )
     endif()
 
-    # examples
-    add_executable(example_search examples/cpp/example_search.cpp)
-    target_link_libraries(example_search hnswlib)
-
-    add_executable(example_epsilon_search examples/cpp/example_epsilon_search.cpp)
-    target_link_libraries(example_epsilon_search hnswlib)
-
-    add_executable(example_multivector_search examples/cpp/example_multivector_search.cpp)
-    target_link_libraries(example_multivector_search hnswlib)
-
-    add_executable(example_filter examples/cpp/example_filter.cpp)
-    target_link_libraries(example_filter hnswlib)
-
-    add_executable(example_replace_deleted examples/cpp/example_replace_deleted.cpp)
-    target_link_libraries(example_replace_deleted hnswlib)
-
-    add_executable(example_mt_search examples/cpp/example_mt_search.cpp)
-    target_link_libraries(example_mt_search hnswlib)
-
-    add_executable(example_mt_filter examples/cpp/example_mt_filter.cpp)
-    target_link_libraries(example_mt_filter hnswlib)
-
-    add_executable(example_mt_replace_deleted examples/cpp/example_mt_replace_deleted.cpp)
-    target_link_libraries(example_mt_replace_deleted hnswlib)
-
     # tests
     add_executable(multivector_search_test tests/cpp/multivector_search_test.cpp)
     target_link_libraries(multivector_search_test hnswlib)

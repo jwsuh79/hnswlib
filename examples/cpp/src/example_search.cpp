@@ -25,10 +25,10 @@ int main(int argc, char* argv[]) {
     cmdl("max", 10000) >> max_elements;
     cmdl("M", 16) >> M;
     cmdl("ef", 200) >> ef_construction;
-    cmdl("check_recall", false) >> check_recall;
+    check_recall = cmdl["check_recall"] ? true : false;  // flag argument
 
 
-    std::cout << dim << " " << max_elements << " " << M << " " << ef_construction << std::endl;
+    std::cout << "Dim: " << dim << ", Max: " << max_elements << ", M: " << M << ", ef: " << ef_construction << ", check_recall: " << check_recall << std::endl;
     // Initing index
     hnswlib::L2Space space(dim);
     hnswlib::HierarchicalNSW<float>* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, M, ef_construction);
