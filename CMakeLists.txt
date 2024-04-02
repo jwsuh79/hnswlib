@@ -31,6 +31,7 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
 else()
     option(HNSWLIB_EXAMPLES "Build examples and tests." OFF)
 endif()
+
 if(HNSWLIB_EXAMPLES)
     set(CMAKE_CXX_STANDARD 11)
 
@@ -78,3 +79,5 @@ if(HNSWLIB_EXAMPLES)
     add_executable(main tests/cpp/main.cpp tests/cpp/sift_1b.cpp)
     target_link_libraries(main hnswlib)
 endif()
+
+add_subdirectory(examples/cpp)

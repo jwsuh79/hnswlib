@@ -78,7 +78,7 @@ class BruteforceSearch : public AlgorithmInterface<dist_t> {
                 cur_element_count++;
             }
         }
-        memcpy(data_ + size_per_element_ * idx + data_size_, &label, sizeof(labeltype));
+        memcpy(data_ + size_per_element_ * idx + data_size_, &label, sizeof(labeltype));  // put the label at the end of datapoint
         memcpy(data_ + size_per_element_ * idx, datapoint, data_size_);
     }
 
@@ -93,9 +93,12 @@ class BruteforceSearch : public AlgorithmInterface<dist_t> {
 
         dict_external_to_internal.erase(found);
 
+        // replace the index of the last datapoint's label with the erased datapoint's index
         size_t cur_c = found->second;
         labeltype label = *((labeltype*)(data_ + size_per_element_ * (cur_element_count-1) + data_size_));
         dict_external_to_internal[label] = cur_c;
+
+        // move the last datapoint to the erased data location.
         memcpy(data_ + size_per_element_ * cur_c,
                 data_ + size_per_element_ * (cur_element_count-1),
                 data_size_+sizeof(labeltype));
@@ -108,13 +111,17 @@ class BruteforceSearch : public AlgorithmInterface<dist_t> {
         assert(k <= cur_element_count);
         std::priority_queue<std::pair<dist_t, labeltype >> topResults;
         if (cur_element_count == 0) return topResults;
+
+        // insert the first k datapoint's distance in the PQ.
         for (int i = 0; i < k; i++) {
             dist_t dist = fstdistfunc_(query_data, data_ + size_per_element_ * i, dist_func_param_);
             labeltype label = *((labeltype*) (data_ + size_per_element_ * i + data_size_));
-            if ((!isIdAllowed) || (*isIdAllowed)(label)) {
+            if ((!isIdAllowed) || (*isIdAllowed)(label)) {  // if isIdAllowed == nullptr or the filer funcion returns true
                 topResults.emplace(dist, label);
             }
         }
+
+        // check the rest of datapoints' distance and keep maintaining the topResults.
         dist_t lastdist = topResults.empty() ? std::numeric_limits<dist_t>::max() : topResults.top().first;
         for (int i = k; i < cur_element_count; i++) {
             dist_t dist = fstdistfunc_(query_data, data_ + size_per_element_ * i, dist_func_param_);
