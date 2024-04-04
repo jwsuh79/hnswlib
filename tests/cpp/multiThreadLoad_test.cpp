@@ -1,9 +1,10 @@
-#include "../../hnswlib/hnswlib.h"
+#include <gtest/gtest.h>
+#include "hnswlib/hnswlib.h"
 #include <thread>
 #include <chrono>
 
 
-int main() {
+TEST(MultithreadLoadTest, MODULE_TEST) {
     std::cout << "Running multithread load test" << std::endl;
     int d = 16;
     int max_elements = 1000;
@@ -16,7 +17,7 @@ int main() {
     hnswlib::HierarchicalNSW<float>* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, 2 * max_elements);
 
     std::cout << "Building index" << std::endl;
-    int num_threads = 40;
+    int num_threads = std::thread::hardware_concurrency();
     int num_labels = 10;
 
     int num_iterations = 10;
@@ -75,7 +76,7 @@ int main() {
     // create threads that will do markDeleted and unmarkDeleted of random elements
     // each thread works with specific range of labels
     std::cout << "Starting markDeleted and unmarkDeleted threads" << std::endl;
-    num_threads = 20;
+    num_threads = std::thread::hardware_concurrency();
     int chunk_size = max_elements / num_threads;
     for (size_t thread_id = 0; thread_id < num_threads; thread_id++) {
         threads.push_back(
@@ -102,7 +103,7 @@ int main() {
 
     // create threads that will add and update random elements
     std::cout << "Starting add and update elements threads" << std::endl;
-    num_threads = 20;
+    num_threads = std::thread::hardware_concurrency();
     std::uniform_int_distribution<> distrib_int_add(max_elements, 2 * max_elements - 1);
     for (size_t thread_id = 0; thread_id < num_threads; thread_id++) {
         threads.push_back(
@@ -136,5 +137,4 @@ int main() {
     }
     
     std::cout << "Finish" << std::endl;
-    return 0;
 }

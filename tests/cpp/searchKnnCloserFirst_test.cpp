@@ -3,7 +3,8 @@
 //  >>>    searchKnnCloserFirst(const void* query_data, size_t k) const;
 // of class AlgorithmInterface
 
-#include "../../hnswlib/hnswlib.h"
+#include <gtest/gtest.h>
+#include "hnswlib/hnswlib.h"
 
 #include <assert.h>
 
@@ -14,7 +15,7 @@ namespace {
 
 using idx_t = hnswlib::labeltype;
 
-void test() {
+TEST(SearchKnnCloserFirstTest, MODULE_TEST) {
     int d = 4;
     idx_t n = 100;
     idx_t nq = 10;
@@ -48,10 +49,10 @@ void test() {
         const void* p = query.data() + j * d;
         auto gd = alg_brute->searchKnn(p, k);
         auto res = alg_brute->searchKnnCloserFirst(p, k);
-        assert(gd.size() == res.size());
+        EXPECT_EQ(gd.size(), res.size());
         size_t t = gd.size();
         while (!gd.empty()) {
-            assert(gd.top() == res[--t]);
+            EXPECT_EQ(gd.top(), res[--t]);
             gd.pop();
         }
     }
@@ -59,10 +60,10 @@ void test() {
         const void* p = query.data() + j * d;
         auto gd = alg_hnsw->searchKnn(p, k);
         auto res = alg_hnsw->searchKnnCloserFirst(p, k);
-        assert(gd.size() == res.size());
+        EXPECT_EQ(gd.size(), res.size());
         size_t t = gd.size();
         while (!gd.empty()) {
-            assert(gd.top() == res[--t]);
+            EXPECT_EQ(gd.top(), res[--t]);
             gd.pop();
         }
     }
@@ -72,11 +73,3 @@ void test() {
 }
 
 }  // namespace
-
-int main() {
-    std::cout << "Testing ..." << std::endl;
-    test();
-    std::cout << "Test ok" << std::endl;
-
-    return 0;
-}

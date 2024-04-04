@@ -1,4 +1,5 @@
-#include "../../hnswlib/hnswlib.h"
+#include <gtest/gtest.h>
+#include "hnswlib/hnswlib.h"
 #include <thread>
 #include <chrono>
 
@@ -58,12 +59,12 @@ inline void ParallelFor(size_t start, size_t end, size_t numThreads, Function fn
 }
 
 
-int main() {
+TEST(MultithreadReplaceTest, MODULE_TEST) {
     std::cout << "Running multithread load test" << std::endl;
     int d = 16;
     int num_elements = 1000;
     int max_elements = 2 * num_elements;
-    int num_threads = 50;
+    int num_threads = 0;
 
     std::mt19937 rng;
     rng.seed(47);
@@ -117,5 +118,4 @@ int main() {
 
     delete[] batch1;
     delete[] batch2;
-    return 0;
 }

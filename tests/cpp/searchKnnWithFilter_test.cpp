@@ -1,11 +1,14 @@
 // This is a test file for testing the filtering feature
 
-#include "../../hnswlib/hnswlib.h"
-
-#include <assert.h>
-
+#include <gtest/gtest.h>
+#include "hnswlib/hnswlib.h"
 #include <vector>
 #include <iostream>
+
+using ::testing::Bool;
+using ::testing::Combine;
+using ::testing::TestWithParam;
+using ::testing::Values;
 
 namespace {
 
@@ -29,122 +32,6 @@ class PickNothing: public hnswlib::BaseFilterFunctor {
     }
 };
 
-void test_some_filtering(hnswlib::BaseFilterFunctor& filter_func, size_t div_num, size_t label_id_start) {
-    int d = 4;
-    idx_t n = 100;
-    idx_t nq = 10;
-    size_t k = 10;
-
-    std::vector<float> data(n * d);
-    std::vector<float> query(nq * d);
-
-    std::mt19937 rng;
-    rng.seed(47);
-    std::uniform_real_distribution<> distrib;
-
-    for (idx_t i = 0; i < n * d; ++i) {
-        data[i] = distrib(rng);
-    }
-    for (idx_t i = 0; i < nq * d; ++i) {
-        query[i] = distrib(rng);
-    }
-
-    hnswlib::L2Space space(d);
-    hnswlib::AlgorithmInterface<float>* alg_brute  = new hnswlib::BruteforceSearch<float>(&space, 2 * n);
-    hnswlib::AlgorithmInterface<float>* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, 2 * n);
-
-    for (size_t i = 0; i < n; ++i) {
-        // `label_id_start` is used to ensure that the returned IDs are labels and not internal IDs
-        alg_brute->addPoint(data.data() + d * i, label_id_start + i);
-        alg_hnsw->addPoint(data.data() + d * i, label_id_start + i);
-    }
-
-    // test searchKnnCloserFirst of BruteforceSearch with filtering
-    for (size_t j = 0; j < nq; ++j) {
-        const void* p = query.data() + j * d;
-        auto gd = alg_brute->searchKnn(p, k, &filter_func);
-        auto res = alg_brute->searchKnnCloserFirst(p, k, &filter_func);
-        assert(gd.size() == res.size());
-        size_t t = gd.size();
-        while (!gd.empty()) {
-            assert(gd.top() == res[--t]);
-            assert((gd.top().second % div_num) == 0);
-            gd.pop();
-        }
-    }
-
-    // test searchKnnCloserFirst of hnsw with filtering
-    for (size_t j = 0; j < nq; ++j) {
-        const void* p = query.data() + j * d;
-        auto gd = alg_hnsw->searchKnn(p, k, &filter_func);
-        auto res = alg_hnsw->searchKnnCloserFirst(p, k, &filter_func);
-        assert(gd.size() == res.size());
-        size_t t = gd.size();
-        while (!gd.empty()) {
-            assert(gd.top() == res[--t]);
-            assert((gd.top().second % div_num) == 0);
-            gd.pop();
-        }
-    }
-
-    delete alg_brute;
-    delete alg_hnsw;
-}
-
-void test_none_filtering(hnswlib::BaseFilterFunctor& filter_func, size_t label_id_start) {
-    int d = 4;
-    idx_t n = 100;
-    idx_t nq = 10;
-    size_t k = 10;
-
-    std::vector<float> data(n * d);
-    std::vector<float> query(nq * d);
-
-    std::mt19937 rng;
-    rng.seed(47);
-    std::uniform_real_distribution<> distrib;
-
-    for (idx_t i = 0; i < n * d; ++i) {
-        data[i] = distrib(rng);
-    }
-    for (idx_t i = 0; i < nq * d; ++i) {
-        query[i] = distrib(rng);
-    }
-
-    hnswlib::L2Space space(d);
-    hnswlib::AlgorithmInterface<float>* alg_brute  = new hnswlib::BruteforceSearch<float>(&space, 2 * n);
-    hnswlib::AlgorithmInterface<float>* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, 2 * n);
-
-    for (size_t i = 0; i < n; ++i) {
-        // `label_id_start` is used to ensure that the returned IDs are labels and not internal IDs
-        alg_brute->addPoint(data.data() + d * i, label_id_start + i);
-        alg_hnsw->addPoint(data.data() + d * i, label_id_start + i);
-    }
-
-    // test searchKnnCloserFirst of BruteforceSearch with filtering
-    for (size_t j = 0; j < nq; ++j) {
-        const void* p = query.data() + j * d;
-        auto gd = alg_brute->searchKnn(p, k, &filter_func);
-        auto res = alg_brute->searchKnnCloserFirst(p, k, &filter_func);
-        assert(gd.size() == res.size());
-        assert(0 == gd.size());
-    }
-
-    // test searchKnnCloserFirst of hnsw with filtering
-    for (size_t j = 0; j < nq; ++j) {
-        const void* p = query.data() + j * d;
-        auto gd = alg_hnsw->searchKnn(p, k, &filter_func);
-        auto res = alg_hnsw->searchKnnCloserFirst(p, k, &filter_func);
-        assert(gd.size() == res.size());
-        assert(0 == gd.size());
-    }
-
-    delete alg_brute;
-    delete alg_hnsw;
-}
-
-}  // namespace
-
 class CustomFilterFunctor: public hnswlib::BaseFilterFunctor {
     std::unordered_set<idx_t> allowed_values;
 
@@ -156,24 +43,105 @@ class CustomFilterFunctor: public hnswlib::BaseFilterFunctor {
     }
 };
 
-int main() {
-    std::cout << "Testing ..." << std::endl;
 
-    // some of the elements are filtered
+class searchKnnWithFilter {
+public:
+    searchKnnWithFilter(hnswlib::BaseFilterFunctor& filter_func, size_t div_num, size_t label_id_start):
+        filter_func(filter_func), div_num(div_num), label_id_start(label_id_start) {   
+        d = 4;
+        n = 100;
+        nq = 10;
+        k = 10;
+        data = std::vector<float>(n * d);
+        query = std::vector<float>(nq * d);
+
+        std::mt19937 rng;
+        rng.seed(47);
+        std::uniform_real_distribution<> distrib;
+
+        for (idx_t i = 0; i < n * d; ++i) {
+            data[i] = distrib(rng);
+        }
+        for (idx_t i = 0; i < nq * d; ++i) {
+            query[i] = distrib(rng);
+        }
+
+        space = new hnswlib::L2Space(d);
+        alg_brute  = new hnswlib::BruteforceSearch<float>(space, 2 * n);
+        alg_hnsw = new hnswlib::HierarchicalNSW<float>(space, 2 * n);
+
+        for (size_t i = 0; i < n; ++i) {
+            // `label_id_start` is used to ensure that the returned IDs are labels and not internal IDs
+            alg_brute->addPoint(data.data() + d * i, label_id_start + i);
+            alg_hnsw->addPoint(data.data() + d * i, label_id_start + i);
+        }
+    }
+    ~searchKnnWithFilter() {
+        delete alg_brute;
+        delete alg_hnsw;
+        delete space;
+    }
+
+    void test_code(hnswlib::AlgorithmInterface<float>* alg) {
+        for (size_t j = 0; j < nq; ++j) {
+            const void* p = query.data() + j * d;
+            auto gd = alg->searchKnn(p, k, &filter_func);
+            auto res = alg->searchKnnCloserFirst(p, k, &filter_func);
+            EXPECT_EQ(gd.size(), res.size());
+            if (div_num > 0) {  // Test with filter
+                size_t t = gd.size();
+                while (!gd.empty()) {
+                    EXPECT_EQ(gd.top(), res[--t]);
+                    //std::cout << gd.top().second << " " << div_num << std::endl;
+                    EXPECT_EQ((gd.top().second % div_num), 0);
+                    gd.pop();
+                }
+            } else {  // Test with nonfilter (div_num=-1)
+                EXPECT_EQ(0, gd.size());
+            }
+        }
+    }
+
+    void RunTest() {
+        test_code(this->alg_brute);
+        test_code(this->alg_hnsw);
+    }
+
+    hnswlib::BaseFilterFunctor& filter_func;
+    hnswlib::L2Space* space;
+    hnswlib::AlgorithmInterface<float>* alg_brute; 
+    hnswlib::AlgorithmInterface<float>* alg_hnsw;
+    size_t div_num;
+    size_t label_id_start;
+    std::vector<float> data;
+    std::vector<float> query;
+    int d;
+    idx_t n;
+    idx_t nq;
+    size_t k;
+};
+
+TEST(searchKnnWithFilterTest, DivBy3StartId17) {
     PickDivisibleIds pickIdsDivisibleByThree(3);
-    test_some_filtering(pickIdsDivisibleByThree, 3, 17);
-    PickDivisibleIds pickIdsDivisibleBySeven(7);
-    test_some_filtering(pickIdsDivisibleBySeven, 7, 17);
+    searchKnnWithFilter seach(pickIdsDivisibleByThree, 3, 17);
+    seach.RunTest();
+}
 
-    // all of the elements are filtered
+TEST(searchKnnWithFilterTest, DivBy7StartId17) {
+    PickDivisibleIds pickIdsDivisibleByThree(7);
+    searchKnnWithFilter seach(pickIdsDivisibleByThree, 7, 17);
+    seach.RunTest();
+}
+
+TEST(searchKnnWithFilterTest, PickNothing) {
     PickNothing pickNothing;
-    test_none_filtering(pickNothing, 17);
+    searchKnnWithFilter seach(pickNothing, -1, 17);
+    seach.RunTest();
+}
 
-    // functor style which can capture context
+TEST(searchKnnWithFilterTest, CustomFilterFunctor) {
     CustomFilterFunctor pickIdsDivisibleByThirteen({26, 39, 52, 65});
-    test_some_filtering(pickIdsDivisibleByThirteen, 13, 21);
-
-    std::cout << "Test ok" << std::endl;
-
-    return 0;
+    searchKnnWithFilter seach(pickIdsDivisibleByThirteen, 13, 21);
+    seach.RunTest();
+}
 }

@@ -1,10 +1,10 @@
-#include "assert.h"
-#include "../../hnswlib/hnswlib.h"
+#include <gtest/gtest.h>
+#include "hnswlib/hnswlib.h"
 
 typedef unsigned int docidtype;
 typedef float dist_t;
 
-int main() {
+TEST(EpsilonSearchTest, MODULE_TEST) {
     int dim = 16;               // Dimension of the elements
     int max_elements = 10000;   // Maximum number of elements, should be known beforehand
     int M = 16;                 // Tightly connected with internal dimensionality of the data
@@ -59,7 +59,7 @@ int main() {
             float dist = pair.first;
             hnswlib::labeltype label = pair.second;
             hnsw_labels.insert(label);
-            assert(dist >=0 && dist <= epsilon2);
+            EXPECT_TRUE(dist >=0 && dist <= epsilon2);
         }
         std::priority_queue<std::pair<float, hnswlib::labeltype>> result_brute =
             alg_brute->searchKnn(query_data, max_elements);
@@ -81,11 +81,11 @@ int main() {
             }
         }
         if (gt_labels.size() == 0) {
-            assert(correct == 0);
+            EXPECT_TRUE(correct == 0);
             continue;
         }
         float recall = correct / gt_labels.size();
-        assert(recall > 0.95);
+        EXPECT_TRUE(recall > 0.95);
         delete[] query_data;
     }
     std::cout << "Recall is OK\n";
@@ -103,12 +103,11 @@ int main() {
         if (!result.empty()) {
             dist = result[0].first;
         }
-        assert(dist == 0);
+        EXPECT_TRUE(dist == 0);
     }
     std::cout << "Small epsilon search is OK\n";
 
     delete[] data;
     delete alg_brute;
     delete alg_hnsw;
-    return 0;
 }

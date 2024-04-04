@@ -1,10 +1,10 @@
-#include <assert.h>
-#include "../../hnswlib/hnswlib.h"
+#include <gtest/gtest.h>
+#include "hnswlib/hnswlib.h"
 
 typedef unsigned int docidtype;
 typedef float dist_t;
 
-int main() {
+TEST(MultivectorSearchTest, MODULE_TEST) {
     int dim = 16;               // Dimension of the elements
     int max_elements = 1000;    // Maximum number of elements, should be known beforehand
     int M = 16;                 // Tightly connected with internal dimensionality of the data
@@ -79,7 +79,7 @@ int main() {
             docidtype doc_id = label_docid_lookup[label];
             hnsw_docs.emplace(doc_id);
         }
-        assert(hnsw_docs.size() == num_docs);
+        EXPECT_EQ(hnsw_docs.size(), num_docs);
 
         // Check overall recall
         std::vector<std::pair<dist_t, hnswlib::labeltype>> gt_results = 
@@ -101,7 +101,8 @@ int main() {
     }
     float recall = correct / total_num_elements;
     std::cout << "random elements search recall : " << recall << "\n";
-    assert(recall > 0.95);
+    EXPECT_TRUE(recall > 0.95);
+    //assert(recall > 0.95);
 
     // Query the elements for themselves and measure recall
     correct = 0;
@@ -117,10 +118,10 @@ int main() {
     }
     recall = correct / max_elements;
     std::cout << "same elements search recall : " << recall << "\n";
-    assert(recall > 0.99);
+    EXPECT_TRUE(recall > 0.99);
+    //assert(recall > 0.99);
 
     delete[] data;
     delete alg_brute;
     delete alg_hnsw;
-    return 0;
 }

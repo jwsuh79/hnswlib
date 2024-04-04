@@ -34,7 +34,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     size_t ef_construction_{0};
     size_t ef_{ 0 };
 
-    double mult_{0.0}, revSize_{0.0};
+    //double mult_{0.0}, revSize_{0.0};
     int maxlevel_{0};
 
     std::unique_ptr<VisitedListPool> visited_list_pool_{nullptr};
@@ -143,8 +143,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         if (linkLists_ == nullptr)
             throw std::runtime_error("Not enough memory: HierarchicalNSW failed to allocate linklists");
         size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
-        mult_ = 1 / log(1.0 * M_);
-        revSize_ = 1.0 / mult_;
     }
 
 
@@ -208,8 +206,12 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     }
 
 
-    int getRandomLevel(double reverse_size) {
-        std::uniform_real_distribution<double> distribution(0.0, 1.0);
+    int getRandomLevel() {
+        // max r value (level) decreases as the M value increases.
+        // M -> max_leval = 2 -> 1074, 6 -> 415, 16 -> 268, 32 -> 214, 10000(max) -> 80
+        const static double reverse_size = 1 / log(1.0 * this->M_);  // M_ must be larger than 1
+        const static double closest_zero = nextafter(0.0, 1.0);  // to exclude 0.0 in the following distribution
+        std::uniform_real_distribution<double> distribution(closest_zero, 1.0);
         double r = -log(distribution(level_generator_)) * reverse_size;
         return (int) r;
     }
@@ -673,7 +675,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
         size += sizeof(maxM0_);
         size += sizeof(M_);
-        size += sizeof(mult_);
+        //size += sizeof(mult_);
         size += sizeof(ef_construction_);
 
         size += cur_element_count * size_data_per_element_;
@@ -702,7 +704,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
         writeBinaryPOD(output, maxM0_);
         writeBinaryPOD(output, M_);
-        writeBinaryPOD(output, mult_);
+        //writeBinaryPOD(output, mult_);
         writeBinaryPOD(output, ef_construction_);
 
         output.write(data_level0_memory_, cur_element_count * size_data_per_element_);
@@ -746,7 +748,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         readBinaryPOD(input, maxM_);
         readBinaryPOD(input, maxM0_);
         readBinaryPOD(input, M_);
-        readBinaryPOD(input, mult_);
+        //readBinaryPOD(input, mult_);
         readBinaryPOD(input, ef_construction_);
 
         data_size_ = s->get_data_size();
@@ -795,7 +797,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         if (linkLists_ == nullptr)
             throw std::runtime_error("Not enough memory: loadIndex failed to allocate linklists");
         element_levels_ = std::vector<int>(max_elements);
-        revSize_ = 1.0 / mult_;
+        //revSize_ = 1.0 / mult_;
         ef_ = 10;
         for (size_t i = 0; i < cur_element_count; i++) {
             label_lookup_[getExternalLabel(i)] = i;
@@ -963,9 +965,10 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         // lock all operations with element by label
         std::unique_lock <std::mutex> lock_label(getLabelOpMutex(label));
         if (!replace_deleted) {
-            addPoint(data_point, label, -1);
+            addPoint_(data_point, label, -1);
             return;
         }
+
         // check if there is vacant place
         tableint internal_id_replaced;
         std::unique_lock <std::mutex> lock_deleted_elements(deleted_elements_lock);
@@ -979,7 +982,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         // if there is no vacant place then add or update point
         // else add point to vacant place
         if (!is_vacant_place) {
-            addPoint(data_point, label, -1);
+            addPoint_(data_point, label, -1);
         } else {
             // we assume that there are no concurrent operations on deleted element
             labeltype label_replaced = getExternalLabel(internal_id_replaced);
@@ -1154,7 +1157,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     }
 
 
-    tableint addPoint(const void *data_point, labeltype label, int level) {
+    // Algorithm1: INSERT
+    tableint addPoint_(const void *data_point, labeltype label, int level) {  // 3rd parameter 'int level' is not used?
         tableint cur_c = 0;
         {
             // Checking if the element with the same label already exists
@@ -1165,7 +1169,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 tableint existingInternalId = search->second;
                 if (allow_replace_deleted_) {
                     if (isMarkedDeleted(existingInternalId)) {
-                        throw std::runtime_error("Can't use addPoint to update deleted elements if replacement of deleted elements is enabled.");
+                        throw std::runtime_error("Can't use addPoint_ to update deleted elements if replacement of deleted elements is enabled.");
                     }
                 }
                 lock_table.unlock();
@@ -1188,8 +1192,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         }
 
         std::unique_lock <std::mutex> lock_el(link_list_locks_[cur_c]);
-        int curlevel = getRandomLevel(mult_);
-        if (level > 0)
+        int curlevel = getRandomLevel();  // Alg1.4  assign new element's level
+        
+        if (level > 0)  // never reached?, the level is always -1
             curlevel = level;
 
         element_levels_[cur_c] = curlevel;
@@ -1210,7 +1215,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         if (curlevel) {
             linkLists_[cur_c] = (char *) malloc(size_links_per_element_ * curlevel + 1);
             if (linkLists_[cur_c] == nullptr)
-                throw std::runtime_error("Not enough memory: addPoint failed to allocate linklist");
+                throw std::runtime_error("Not enough memory: addPoint_ failed to allocate linklist");
             memset(linkLists_[cur_c], 0, size_links_per_element_ * curlevel + 1);
         }
 
