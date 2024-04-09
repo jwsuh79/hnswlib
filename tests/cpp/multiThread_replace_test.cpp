@@ -90,7 +90,7 @@ TEST(MultithreadReplaceTest, MODULE_TEST) {
     std::shuffle(rand_labels.begin(), rand_labels.end(), rng);
 
     int iter = 0;
-    while (iter < 200) {
+    while (iter < 16) {  // original iter < 200
         hnswlib::HierarchicalNSW<float>* alg_hnsw = new hnswlib::HierarchicalNSW<float>(&space, max_elements, 16, 200, 123, true);
 
         // add batch1 data

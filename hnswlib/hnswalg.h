@@ -34,7 +34,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     size_t ef_construction_{0};
     size_t ef_{ 0 };
 
-    //double mult_{0.0}, revSize_{0.0};
+    //double mult_{0.0}, revSize_{0.0};  // unnecessary
     int maxlevel_{0};
 
     std::unique_ptr<VisitedListPool> visited_list_pool_{nullptr};
@@ -79,7 +79,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     }
 
 
-    HierarchicalNSW(
+    HierarchicalNSW(  // constructor for loading data from the location. check sift_1b.cpp
         SpaceInterface<dist_t> *s,
         const std::string &location,
         bool nmslib = false,
@@ -106,6 +106,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         data_size_ = s->get_data_size();
         fstdistfunc_ = s->get_dist_func();
         dist_func_param_ = s->get_dist_func_param();
+        if (M < 2)
+            M = 2;  // M must be 2 at least.
         if ( M <= 10000 ) {
             M_ = M;
         } else {
@@ -242,7 +244,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             dist_t dist = fstdistfunc_(data_point, getDataByInternalId(ep_id), dist_func_param_);
             top_candidates.emplace(dist, ep_id);
             lowerBound = dist;
-            candidateSet.emplace(-dist, ep_id);
+            candidateSet.emplace(-dist, ep_id);  // make it min-PQ
         } else {
             lowerBound = std::numeric_limits<dist_t>::max();
             candidateSet.emplace(-lowerBound, ep_id);
@@ -555,8 +557,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
                 data[idx] = selectedNeighbors[idx];
             }
-        }
+        }  // 1st select-neighbors...
 
+    
         for (size_t idx = 0; idx < selectedNeighbors.size(); idx++) {
             std::unique_lock <std::mutex> lock(link_list_locks_[selectedNeighbors[idx]]);
 
@@ -979,11 +982,9 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         }
         lock_deleted_elements.unlock();
 
-        // if there is no vacant place then add or update point
-        // else add point to vacant place
-        if (!is_vacant_place) {
+        if (!is_vacant_place) {  // add new point if there is no vacant place to add or update a point
             addPoint_(data_point, label, -1);
-        } else {
+        } else {  // replace the selected deleted point with the data_point.
             // we assume that there are no concurrent operations on deleted element
             labeltype label_replaced = getExternalLabel(internal_id_replaced);
             setExternalLabel(internal_id_replaced, label);
@@ -1158,7 +1159,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
 
 
     // Algorithm1: INSERT
-    tableint addPoint_(const void *data_point, labeltype label, int level) {  // 3rd parameter 'int level' is not used?
+    tableint addPoint_(const void *data_point, labeltype label, int level) {
         tableint cur_c = 0;
         {
             // Checking if the element with the same label already exists
@@ -1194,7 +1195,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         std::unique_lock <std::mutex> lock_el(link_list_locks_[cur_c]);
         int curlevel = getRandomLevel();  // Alg1.4  assign new element's level
         
-        if (level > 0)  // never reached?, the level is always -1
+        if (level > 0)  // passed the value of level is usually -1
             curlevel = level;
 
         element_levels_[cur_c] = curlevel;
@@ -1219,9 +1220,10 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             memset(linkLists_[cur_c], 0, size_links_per_element_ * curlevel + 1);
         }
 
-        // Search Layer (Alg2)- 1st
         if ((signed)currObj != -1) {
             if (curlevel < maxlevelcopy) {
+                // Alg1.6. Search-Layer (1st): Get the nearest element from the top level to Ml+1 layer
+                //                             It is the starting point of SEARCH_LAYER with efConstruction
                 dist_t curdist = fstdistfunc_(data_point, getDataByInternalId(currObj), dist_func_param_);
                 for (int level = maxlevelcopy; level > curlevel; level--) {
                     bool changed = true;
@@ -1253,8 +1255,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 if (level > maxlevelcopy || level < 0)  // possible?
                     throw std::runtime_error("Level error");
 
-                std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = searchBaseLayer(  // Search-Layer(2nd)
-                        currObj, data_point, level);
+                std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = 
+                    searchBaseLayer(currObj, data_point, level);  // Alg1.9. Search-Layer (2nd)
                 if (epDeleted) {
                     top_candidates.emplace(fstdistfunc_(data_point, getDataByInternalId(enterpoint_copy), dist_func_param_), enterpoint_copy);
                     if (top_candidates.size() > ef_construction_)
@@ -1262,13 +1264,12 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 }
                 currObj = mutuallyConnectNewElement(data_point, cur_c, top_candidates, level, false);
             }
-        } else {
-            // Do nothing for the first element
+        } else {  // currObj == -1, init for the first element.
             enterpoint_node_ = 0;
             maxlevel_ = curlevel;
         }
 
-        // Releasing lock for the maximum level
+        // Update the enterpoint_node when the curlevel is greater than maxlevel which means new level is added.
         if (curlevel > maxlevelcopy) {
             enterpoint_node_ = cur_c;
             maxlevel_ = curlevel;

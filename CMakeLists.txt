@@ -66,8 +66,10 @@ if(HNSWLIB_EXAMPLES)
     endif()
 
     # system tests
-    add_executable(test_updates tests/cpp/updates_test.cpp)
-    target_link_libraries(test_updates hnswlib)
+    #add_executable(test_updates tests/cpp/updates_test.cpp)
+    #target_link_libraries(test_updates hnswlib)
+    add_executable(sift_1b tests/cpp/sift_1b.cpp)
+    target_link_libraries(sift_1b hnswlib)
 
 endif()
 

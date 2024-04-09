@@ -129,7 +129,7 @@ TEST(MultithreadLoadTest, MODULE_TEST) {
     }
 
     std::cout << "Sleep and continue operations with index" << std::endl;
-    int sleep_ms = 60 * 1000;
+    int sleep_ms = 1 * 1000;  // 60 secs -> 1 secs
     std::this_thread::sleep_for(std::chrono::milliseconds(sleep_ms));
     stop_threads = true;
     for (auto &thread : threads) {

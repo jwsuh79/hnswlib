@@ -363,3 +363,9 @@ void sift_test1B() {
     cout << "Actual memory usage: " << getCurrentRSS() / 1000000 << " Mb \n";
     return;
 }
+
+
+int main() {
+    sift_test1B();
+    return 0;
+}

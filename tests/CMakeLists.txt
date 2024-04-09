@@ -1,6 +1,6 @@
-add_executable(hnswalg_test unittests/hnswalg_test.cpp)
-target_include_directories(hnswalg_test PUBLIC ${CMAKE_SOURCE_DIR})
-target_link_libraries(hnswalg_test GTest::gtest_main)
+add_executable(hnswalg_getrandomlevel_test unittests/hnswalg_getrandomlevel_test.cpp)
+target_include_directories(hnswalg_getrandomlevel_test PUBLIC ${CMAKE_SOURCE_DIR})
+target_link_libraries(hnswalg_getrandomlevel_test GTest::gtest_main)
 
 add_executable(multivector_search_test cpp/multivector_search_test.cpp)
 target_include_directories(multivector_search_test PUBLIC ${CMAKE_SOURCE_DIR})
@@ -35,7 +35,7 @@ target_link_libraries(searchKnnWithFilter_test GTest::gtest_main)
 # target_link_libraries(searchKnnWithFilter_test GTest::gtest_main)
 
 include(GoogleTest)
-gtest_discover_tests(hnswalg_test)
+gtest_discover_tests(hnswalg_getrandomlevel_test)
 gtest_discover_tests(multivector_search_test)
 gtest_discover_tests(epsilon_search_test)
 gtest_discover_tests(multiThread_replace_test)
