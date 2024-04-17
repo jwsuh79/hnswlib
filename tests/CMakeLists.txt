@@ -1,3 +1,11 @@
+add_executable(hnswalg_addPoint_test unittests/hnswalg_addPoint_test.cpp)
+target_include_directories(hnswalg_addPoint_test PUBLIC ${CMAKE_SOURCE_DIR})
+target_link_libraries(hnswalg_addPoint_test GTest::gtest_main)
+
+add_executable(bruteforce_test unittests/bruteforce_test.cpp)
+target_include_directories(bruteforce_test PUBLIC ${CMAKE_SOURCE_DIR})
+target_link_libraries(bruteforce_test GTest::gtest_main)
+
 add_executable(hnswalg_getrandomlevel_test unittests/hnswalg_getrandomlevel_test.cpp)
 target_include_directories(hnswalg_getrandomlevel_test PUBLIC ${CMAKE_SOURCE_DIR})
 target_link_libraries(hnswalg_getrandomlevel_test GTest::gtest_main)
@@ -35,6 +43,8 @@ target_link_libraries(searchKnnWithFilter_test GTest::gtest_main)
 # target_link_libraries(searchKnnWithFilter_test GTest::gtest_main)
 
 include(GoogleTest)
+gtest_discover_tests(hnswalg_addPoint_test)
+gtest_discover_tests(bruteforce_test)
 gtest_discover_tests(hnswalg_getrandomlevel_test)
 gtest_discover_tests(multivector_search_test)
 gtest_discover_tests(epsilon_search_test)

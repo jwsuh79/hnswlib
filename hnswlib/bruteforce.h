@@ -4,6 +4,7 @@
 #include <mutex>
 #include <algorithm>
 #include <assert.h>
+#include <iostream>
 
 namespace hnswlib {
 template<typename dist_t>
@@ -19,7 +20,7 @@ class BruteforceSearch : public AlgorithmInterface<dist_t> {
     void *dist_func_param_;
     std::mutex index_lock;
 
-    std::unordered_map<labeltype, size_t > dict_external_to_internal;
+    std::unordered_map<labeltype, size_t> dict_external_to_internal;
 
 
     BruteforceSearch(SpaceInterface <dist_t> *s)
@@ -68,7 +69,7 @@ class BruteforceSearch : public AlgorithmInterface<dist_t> {
 
             auto search = dict_external_to_internal.find(label);
             if (search != dict_external_to_internal.end()) {
-                idx = search->second;
+                idx = search->second;  // overwrite when the label
             } else {
                 if (cur_element_count >= maxelements_) {
                     throw std::runtime_error("The number of elements exceeds the specified limit\n");
@@ -82,6 +83,9 @@ class BruteforceSearch : public AlgorithmInterface<dist_t> {
         memcpy(data_ + size_per_element_ * idx, datapoint, data_size_);
     }
 
+    labeltype get_label(int idx) const {
+        return *((labeltype*)(data_ + size_per_element_ * idx + data_size_));
+    }
 
     void removePoint(labeltype cur_external) {
         std::unique_lock<std::mutex> lock(index_lock);
@@ -91,18 +95,21 @@ class BruteforceSearch : public AlgorithmInterface<dist_t> {
             return;
         }
 
-        dict_external_to_internal.erase(found);
-
         // replace the index of the last datapoint's label with the erased datapoint's index
         size_t cur_c = found->second;
-        labeltype label = *((labeltype*)(data_ + size_per_element_ * (cur_element_count-1) + data_size_));
+        labeltype label = get_label(cur_element_count-1);        
         dict_external_to_internal[label] = cur_c;
 
-        // move the last datapoint to the erased data location.
-        memcpy(data_ + size_per_element_ * cur_c,
-                data_ + size_per_element_ * (cur_element_count-1),
+        --cur_element_count;
+        dict_external_to_internal.erase(found);  // bug fix: erase found after using it. otherwise (0, 0)
+
+        // move (overwrite) the last datapoint to the erased data location.
+        // so, memcpy is skipped if the erased data location is at the end.
+        if (cur_c != cur_element_count)
+            memcpy(data_ + size_per_element_ * cur_c,
+                data_ + size_per_element_ * (cur_element_count),
                 data_size_+sizeof(labeltype));
-        cur_element_count--;
+        
     }
 
 
@@ -115,7 +122,7 @@ class BruteforceSearch : public AlgorithmInterface<dist_t> {
         // insert the first k datapoint's distance in the PQ.
         for (int i = 0; i < k; i++) {
             dist_t dist = fstdistfunc_(query_data, data_ + size_per_element_ * i, dist_func_param_);
-            labeltype label = *((labeltype*) (data_ + size_per_element_ * i + data_size_));
+            labeltype label = get_label(i);
             if ((!isIdAllowed) || (*isIdAllowed)(label)) {  // if isIdAllowed == nullptr or the filer funcion returns true
                 topResults.emplace(dist, label);
             }
@@ -126,7 +133,7 @@ class BruteforceSearch : public AlgorithmInterface<dist_t> {
         for (int i = k; i < cur_element_count; i++) {
             dist_t dist = fstdistfunc_(query_data, data_ + size_per_element_ * i, dist_func_param_);
             if (dist <= lastdist) {
-                labeltype label = *((labeltype *) (data_ + size_per_element_ * i + data_size_));
+                labeltype label = get_label(i);
                 if ((!isIdAllowed) || (*isIdAllowed)(label)) {
                     topResults.emplace(dist, label);
                 }

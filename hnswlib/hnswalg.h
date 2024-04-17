@@ -16,6 +16,68 @@ typedef unsigned int linklistsizeint;
 
 template<typename dist_t>
 class HierarchicalNSW : public AlgorithmInterface<dist_t> {
+    void init(SpaceInterface<dist_t> *s, size_t max_elements, size_t M, size_t ef_construction,
+        size_t random_seed, bool allow_replace_deleted) {
+        max_elements_ = max_elements;
+        num_deleted_ = 0;
+
+        data_size_ = s->get_data_size();
+        fstdistfunc_ = s->get_dist_func();
+        dist_func_param_ = s->get_dist_func_param();
+
+        // Adjust M value
+        if (M < 2) {
+            M = 2;  // M must be 2 at least.
+        } else if (M>10000) {
+            HNSWERR << "warning: M parameter exceeds 10000 which may lead to adverse effects." << std::endl;
+            HNSWERR << "         Cap to 10000 will be applied for the rest of the processing." << std::endl;
+            M = 10000;
+        }
+        M_ = M;        
+        maxM0_ = M_ * 2;  // Level0 M size is doubled.
+        ef_construction_ = std::max(ef_construction, M_);
+        ef_ = 10;
+
+        level_generator_.seed(random_seed);
+        update_probability_generator_.seed(random_seed + 1);
+
+        size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
+        size_data_per_element_ = size_links_level0_ + data_size_ + sizeof(labeltype);
+        offsetData_ = size_links_level0_;
+        label_offset_ = size_links_level0_ + data_size_;
+        offsetLevel0_ = 0;
+
+        data_level0_memory_ = (char *) malloc(max_elements_ * size_data_per_element_);
+        if (data_level0_memory_ == nullptr)
+            throw std::runtime_error("Not enough memory");
+
+        cur_element_count = 0;
+
+        visited_list_pool_ = std::unique_ptr<VisitedListPool>(new VisitedListPool(1, max_elements));
+
+        // initializations for special treatment of the first node
+        enterpoint_node_ = -1;
+        maxlevel_ = -1;
+
+        linkLists_ = (char **) malloc(sizeof(void *) * max_elements_);
+        if (linkLists_ == nullptr)
+            throw std::runtime_error("Not enough memory: HierarchicalNSW failed to allocate linklists");
+        size_links_per_element_ = M_ * sizeof(tableint) + sizeof(linklistsizeint);
+    }
+
+    void clear() {
+        free(data_level0_memory_);
+        data_level0_memory_ = nullptr;
+        for (tableint i = 0; i < cur_element_count; i++) {
+            if (element_levels_[i] > 0)
+                free(linkLists_[i]);
+        }
+        free(linkLists_);
+        linkLists_ = nullptr;
+        cur_element_count = 0;
+        visited_list_pool_.reset(nullptr);
+    }
+
  public:
     static const tableint MAX_LABEL_OPERATION_LOCKS = 65536;
     static const unsigned char DELETE_MARK = 0x01;
@@ -29,12 +91,10 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     //mutable std::atomic<size_t> num_deleted_{0};  // number of deleted elements  // mutable?
     std::atomic<size_t> num_deleted_{0};  // number of deleted elements
     size_t M_{0};
-    size_t maxM_{0};
     size_t maxM0_{0};
     size_t ef_construction_{0};
-    size_t ef_{ 0 };
-
-    //double mult_{0.0}, revSize_{0.0};  // unnecessary
+    size_t ef_{ 0 };  // minimum search candidates for search KNN
+    
     int maxlevel_{0};
 
     std::unique_ptr<VisitedListPool> visited_list_pool_{nullptr};
@@ -43,7 +103,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
     mutable std::vector<std::mutex> label_op_locks_;
     
 
-    std::mutex global;
+    // std::mutex global; // unnecessary?
     std::vector<std::mutex> link_list_locks_;
 
     tableint enterpoint_node_{0};
@@ -89,7 +149,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         loadIndex(location, s, max_elements);
     }
 
-
     HierarchicalNSW(
         SpaceInterface<dist_t> *s,
         size_t max_elements,
@@ -101,70 +160,12 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             link_list_locks_(max_elements),
             element_levels_(max_elements),
             allow_replace_deleted_(allow_replace_deleted) {
-        max_elements_ = max_elements;
-        num_deleted_ = 0;
-        data_size_ = s->get_data_size();
-        fstdistfunc_ = s->get_dist_func();
-        dist_func_param_ = s->get_dist_func_param();
-        if (M < 2)
-            M = 2;  // M must be 2 at least.
-        if ( M <= 10000 ) {
-            M_ = M;
-        } else {
-            HNSWERR << "warning: M parameter exceeds 10000 which may lead to adverse effects." << std::endl;
-            HNSWERR << "         Cap to 10000 will be applied for the rest of the processing." << std::endl;
-            M_ = 10000;
-        }
-        maxM_ = M_;
-        maxM0_ = M_ * 2;
-        ef_construction_ = std::max(ef_construction, M_);
-        ef_ = 10;
-
-        level_generator_.seed(random_seed);
-        update_probability_generator_.seed(random_seed + 1);
-
-        size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
-        size_data_per_element_ = size_links_level0_ + data_size_ + sizeof(labeltype);
-        offsetData_ = size_links_level0_;
-        label_offset_ = size_links_level0_ + data_size_;
-        offsetLevel0_ = 0;
-
-        data_level0_memory_ = (char *) malloc(max_elements_ * size_data_per_element_);
-        if (data_level0_memory_ == nullptr)
-            throw std::runtime_error("Not enough memory");
-
-        cur_element_count = 0;
-
-        visited_list_pool_ = std::unique_ptr<VisitedListPool>(new VisitedListPool(1, max_elements));
-
-        // initializations for special treatment of the first node
-        enterpoint_node_ = -1;
-        maxlevel_ = -1;
-
-        linkLists_ = (char **) malloc(sizeof(void *) * max_elements_);
-        if (linkLists_ == nullptr)
-            throw std::runtime_error("Not enough memory: HierarchicalNSW failed to allocate linklists");
-        size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
+        init(s, max_elements, M, ef_construction, random_seed, allow_replace_deleted);
     }
-
 
     ~HierarchicalNSW() {
         clear();
     }
-
-    void clear() {
-        free(data_level0_memory_);
-        data_level0_memory_ = nullptr;
-        for (tableint i = 0; i < cur_element_count; i++) {
-            if (element_levels_[i] > 0)
-                free(linkLists_[i]);
-        }
-        free(linkLists_);
-        linkLists_ = nullptr;
-        cur_element_count = 0;
-        visited_list_pool_.reset(nullptr);
-    }
-
 
     struct CompareByFirst {
         constexpr bool operator()(std::pair<dist_t, tableint> const& a,
@@ -517,7 +518,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> &top_candidates,
         int level,
         bool isUpdate) {
-        size_t Mcurmax = level ? maxM_ : maxM0_;
+        size_t Mcurmax = level ? M_ : maxM0_;
         getNeighborsByHeuristic2(top_candidates, M_);
         if (top_candidates.size() > M_)
             throw std::runtime_error("Should be not be more than M_ candidates returned by the heuristic");
@@ -674,7 +675,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         size += sizeof(offsetData_);
         size += sizeof(maxlevel_);
         size += sizeof(enterpoint_node_);
-        size += sizeof(maxM_);
 
         size += sizeof(maxM0_);
         size += sizeof(M_);
@@ -703,7 +703,6 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         writeBinaryPOD(output, offsetData_);
         writeBinaryPOD(output, maxlevel_);
         writeBinaryPOD(output, enterpoint_node_);
-        writeBinaryPOD(output, maxM_);
 
         writeBinaryPOD(output, maxM0_);
         writeBinaryPOD(output, M_);
@@ -748,15 +747,14 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         readBinaryPOD(input, maxlevel_);
         readBinaryPOD(input, enterpoint_node_);
 
-        readBinaryPOD(input, maxM_);
         readBinaryPOD(input, maxM0_);
         readBinaryPOD(input, M_);
-        //readBinaryPOD(input, mult_);
         readBinaryPOD(input, ef_construction_);
 
         data_size_ = s->get_data_size();
         fstdistfunc_ = s->get_dist_func();
         dist_func_param_ = s->get_dist_func_param();
+
 
         auto pos = input.tellg();
 
@@ -788,7 +786,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             throw std::runtime_error("Not enough memory: loadIndex failed to allocate level0");
         input.read(data_level0_memory_, cur_element_count * size_data_per_element_);
 
-        size_links_per_element_ = maxM_ * sizeof(tableint) + sizeof(linklistsizeint);
+        size_links_per_element_ = M_ * sizeof(tableint) + sizeof(linklistsizeint);
 
         size_links_level0_ = maxM0_ * sizeof(tableint) + sizeof(linklistsizeint);
         std::vector<std::mutex>(max_elements).swap(link_list_locks_);
@@ -1058,7 +1056,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 }
 
                 // Retrieve neighbours using heuristic and set connections.
-                getNeighborsByHeuristic2(candidates, layer == 0 ? maxM0_ : maxM_);
+                getNeighborsByHeuristic2(candidates, layer == 0 ? maxM0_ : M_);
 
                 {
                     std::unique_lock <std::mutex> lock(link_list_locks_[neigh]);
@@ -1157,9 +1155,24 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         return result;
     }
 
+    tableint updatePoint_(const void *data_point, tableint existingInternalId, std::unique_lock <std::mutex>& lock_table) {        
+        if (allow_replace_deleted_) {
+            if (isMarkedDeleted(existingInternalId)) {
+                throw std::runtime_error("Can't use addPoint_ to update deleted elements if replacement of deleted elements is enabled.");
+            }
+        }
+        lock_table.unlock();
+
+        if (isMarkedDeleted(existingInternalId)) {
+            unmarkDeletedInternal(existingInternalId);
+        }
+        updatePoint(data_point, existingInternalId, 1.0);
+
+        return existingInternalId;
+    }
 
     // Algorithm1: INSERT
-    tableint addPoint_(const void *data_point, labeltype label, int level) {
+    tableint addPoint_(const void *data_point, labeltype label, int assigned_level) {
         tableint cur_c = 0;
         {
             // Checking if the element with the same label already exists
@@ -1167,43 +1180,33 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             std::unique_lock <std::mutex> lock_table(label_lookup_lock);
             auto search = label_lookup_.find(label);
             if (search != label_lookup_.end()) {
-                tableint existingInternalId = search->second;
-                if (allow_replace_deleted_) {
-                    if (isMarkedDeleted(existingInternalId)) {
-                        throw std::runtime_error("Can't use addPoint_ to update deleted elements if replacement of deleted elements is enabled.");
-                    }
-                }
-                lock_table.unlock();
-
-                if (isMarkedDeleted(existingInternalId)) {
-                    unmarkDeletedInternal(existingInternalId);
-                }
-                updatePoint(data_point, existingInternalId, 1.0);
-
-                return existingInternalId;
+                return updatePoint_(data_point, search->second, lock_table);
             }
 
             if (cur_element_count >= max_elements_) {
                 throw std::runtime_error("The number of elements exceeds the specified limit");
             }
 
-            cur_c = cur_element_count;
-            cur_element_count++;
+            cur_c = cur_element_count++;
             label_lookup_[label] = cur_c;
         }
 
         std::unique_lock <std::mutex> lock_el(link_list_locks_[cur_c]);
         int curlevel = getRandomLevel();  // Alg1.4  assign new element's level
         
-        if (level > 0)  // passed the value of level is usually -1
-            curlevel = level;
+        if (assigned_level > 0)  // -1 is common case -> not using assigned_level
+            curlevel = assigned_level;
 
         element_levels_[cur_c] = curlevel;
 
-        std::unique_lock <std::mutex> templock(global);
-        int maxlevelcopy = maxlevel_;
-        if (curlevel <= maxlevelcopy)
-            templock.unlock();
+        //std::unique_lock <std::mutex> templock(global);
+        int cur_maxlevel = maxlevel_;
+        // if (curlevel <= cur_maxlevel) {            
+        //  ;//   templock.unlock();
+        // } else {
+        //  ;//   templock.unlock();; // templock needs to pass MultithreadLoadTest
+        // }
+        
         tableint currObj = enterpoint_node_;
         tableint enterpoint_copy = enterpoint_node_;
 
@@ -1221,11 +1224,11 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         }
 
         if ((signed)currObj != -1) {
-            if (curlevel < maxlevelcopy) {
+            if (curlevel < cur_maxlevel) {
                 // Alg1.6. Search-Layer (1st): Get the nearest element from the top level to Ml+1 layer
                 //                             It is the starting point of SEARCH_LAYER with efConstruction
                 dist_t curdist = fstdistfunc_(data_point, getDataByInternalId(currObj), dist_func_param_);
-                for (int level = maxlevelcopy; level > curlevel; level--) {
+                for (int level = cur_maxlevel; level > curlevel; level--) {
                     bool changed = true;
                     while (changed) {
                         changed = false;
@@ -1251,8 +1254,8 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
             }
 
             bool epDeleted = isMarkedDeleted(enterpoint_copy);
-            for (int level = std::min(curlevel, maxlevelcopy); level >= 0; level--) {
-                if (level > maxlevelcopy || level < 0)  // possible?
+            for (int level = std::min(curlevel, cur_maxlevel); level >= 0; level--) {
+                if (level > cur_maxlevel || level < 0)  // possible?
                     throw std::runtime_error("Level error");
 
                 std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> top_candidates = 
@@ -1270,7 +1273,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
         }
 
         // Update the enterpoint_node when the curlevel is greater than maxlevel which means new level is added.
-        if (curlevel > maxlevelcopy) {
+        if (curlevel > cur_maxlevel) {
             enterpoint_node_ = cur_c;
             maxlevel_ = curlevel;
         }
