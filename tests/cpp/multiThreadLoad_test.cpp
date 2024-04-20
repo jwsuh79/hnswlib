@@ -57,8 +57,8 @@ TEST(MultithreadLoadTest, MODULE_TEST) {
 
     // insert remaining elements if needed
     for (hnswlib::labeltype label = 0; label < max_elements; label++) {
-        auto search = alg_hnsw->label_lookup_.find(label);
-        if (search == alg_hnsw->label_lookup_.end()) {
+        //auto search = alg_hnsw->label_lookup_.find(label);
+        if (!alg_hnsw->label_lookup.find_label(label)) {
             std::cout << "Adding " << label << std::endl;
             std::vector<float> data(d);
             for (int i = 0; i < d; i++) {
