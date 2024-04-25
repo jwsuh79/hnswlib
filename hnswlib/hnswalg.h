@@ -1015,7 +1015,7 @@ class HierarchicalNSW : public AlgorithmInterface<dist_t> {
                 //     continue;
 
                 std::priority_queue<std::pair<dist_t, tableint>, std::vector<std::pair<dist_t, tableint>>, CompareByFirst> candidates;
-                //size_t size = sCand.find(neigh) == sCand.end() ? sCand.size() : sCand.size() - 1;  // sCand guaranteed to have size >= 1
+                size_t size = sCand.find(neigh) == sCand.end() ? sCand.size() : sCand.size() - 1;  // sCand guaranteed to have size >= 1
 
                 size_t elementsToKeep = std::min(ef_construction_, size);
                 for (auto&& cand : sCand) {
